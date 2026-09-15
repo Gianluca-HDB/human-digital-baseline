@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#f5f5f7">
+<link rel="manifest" href="manifest.json">
+<title>Human Digital Baseline</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f5f7;color:#111;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:720px;margin:auto;min-height:100vh;padding:24px}.card{background:#fff;border-radius:26px;padding:26px;box-shadow:0 12px 40px #00000010}
+h1{font-size:34px;margin:0}.eyebrow{font-size:13px;letter-spacing:.12em;color:#666;font-weight:700}.sub{color:#666;margin:6px 0 24px}
+button{width:100%;padding:16px;border:0;border-radius:16px;font-size:18px;font-weight:700;background:#111;color:#fff}
+button.alt{background:#eee;color:#111;margin-top:10px}.arena{height:360px;border-radius:22px;background:#eee;display:grid;place-items:center;text-align:center;touch-action:manipulation;user-select:none}
+.dot{width:120px;height:120px;background:#111;border-radius:50%}.big{font-size:34px;font-weight:800}.muted{color:#666}.hidden{display:none}
+.progress{margin:0 0 12px;color:#666;font-variant-numeric:tabular-nums}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.metric{background:#f3f3f3;padding:15px;border-radius:16px}.metric b{display:block;font-size:24px;margin-top:4px}.note{font-size:13px;line-height:1.45;color:#666;margin-top:18px}
+input{width:100%;font-size:18px;padding:13px;border:1px solid #ccc;border-radius:13px;margin:7px 0 18px}
+.tapbtn{width:190px;height:190px;border-radius:50%;font-size:28px}
+.choice{display:grid;grid-template-columns:1fr 1fr;gap:12px}.choice button{height:120px;font-size:42px}
+</style>
+</head><body><main><div class="card">
+<section id="home">
+<div class="eyebrow">RESEARCH PROTOTYPE v0.1</div><h1>Human Digital Baseline</h1>
+<div class="sub">A 2-minute cognitive-motor daily fingerprint.</div>
+<label>Participant ID</label><input id="pid" value="TEST001" maxlength="32">
+<button onclick="startBattery()">START DAILY SESSION</button>
+<p class="note">Prototype for technical testing, not a medical or diagnostic device. Do not use with research participants until an appropriate protocol, consent/privacy process and supervision are in place.</p>
+</section>
+
+<section id="rt" class="hidden"><div class="progress" id="rtprog"></div><div id="rtarena" class="arena"></div></section>
+<section id="tap" class="hidden"><div class="progress">Task 2/4 · Tapping</div><div class="arena"><div><div id="tapcount" class="big">15.0 s</div><p class="muted">Tap as quickly as you comfortably can</p><button id="tapbtn" class="tapbtn">TAP</button></div></div></section>
+<section id="gonogo" class="hidden"><div class="progress" id="ggprog">Task 3/4 · Go / No-Go</div><div id="ggarena" class="arena"></div></section>
+<section id="memory" class="hidden"><div class="progress">Task 4/4 · Working memory</div><div id="memarena" class="arena"></div></section>
+
+<section id="result" class="hidden">
+<div class="eyebrow">TODAY'S DIGITAL FINGERPRINT</div><h1>Session complete</h1><div class="sub" id="when"></div>
+<div class="grid">
+<div class="metric">Reaction median<b id="r_rt">—</b></div>
+<div class="metric">RT variability<b id="r_sd">—</b></div>
+<div class="metric">Tapping rate<b id="r_tap">—</b></div>
+<div class="metric">Go/No-Go accuracy<b id="r_gg">—</b></div>
+<div class="metric">Go RT median<b id="r_ggrt">—</b></div>
+<div class="metric">Memory<b id="r_mem">—</b></div>
+</div>
+<button class="alt" onclick="exportCSV()">EXPORT RAW DATA</button><button class="alt" onclick="location.reload()">NEW SESSION</button>
+<p class="note">The app stores this session in your browser and can export raw measurements. The “Personal Baseline / PDI” will be added only after repeated-session validation.</p>
+</section>
+</div></main>
+<script>
+const $=x=>document.getElementById(x); const hideAll=()=>document.querySelectorAll("section").forEach(x=>x.classList.add("hidden"));
+let data={participant:"",session:"",rt:[],tap:[],gonogo:[],memory:null}, timer, state="", t0=0, trial=0, falseStarts=0;
+const median=a=>{let s=[...a].sort((x,y)=>x-y),n=s.length;return n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2};
+const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const sd=a=>{if(a.length<2)return 0;let m=mean(a);return Math.sqrt(a.reduce((s,x)=>s+(x-m)**2,0)/(a.length-1))};
+function startBattery(){data.participant=$("pid").value.trim()||"TEST";data.session=new Date().toISOString();startRT()}
+function startRT(){hideAll();$("rt").classList.remove("hidden");trial=0;nextRT()}
+function nextRT(){state="wait";$("rtprog").textContent=`Task 1/4 · Reaction time · ${trial+1}/10`; $("rtarena").innerHTML='<div><div class="big">WAIT…</div><div class="muted">Tap when the circle appears</div></div>';timer=setTimeout(()=>{state="go";t0=performance.now();$("rtarena").innerHTML='<div><div class="dot"></div><div class="big">TOUCH!</div></div>'},1200+Math.random()*2800)}
+$("rtarena").addEventListener("pointerdown",e=>{e.preventDefault();if(state==="wait"){clearTimeout(timer);falseStarts++;state="penalty";$("rtarena").innerHTML='<div class="big">TOO EARLY</div>';setTimeout(nextRT,800)}else if(state==="go"){let rt=performance.now()-t0;data.rt.push({trial:trial+1,rt:+rt.toFixed(3)});trial++;state="between";if(trial===10)startTap();else{$("rtarena").innerHTML=`<div class="big">${Math.round(rt)} ms</div>`;setTimeout(nextRT,450)}}},{passive:false});
+
+function startTap(){hideAll();$("tap").classList.remove("hidden");let started=false,start=0;data.tap=[];$("tapcount").textContent="15.0 s";
+$("tapbtn").onpointerdown=e=>{e.preventDefault();if(!started){started=true;start=performance.now();requestAnimationFrame(tickTap)}let now=performance.now();if(now-start<=15000)data.tap.push(+(now-start).toFixed(3))};
+function tickTap(){let elapsed=performance.now()-start, left=Math.max(0,15-elapsed/1000);$("tapcount").textContent=`${left.toFixed(1)} s · ${data.tap.length} taps`;if(elapsed<15000)requestAnimationFrame(tickTap);else{started=false;$("tapbtn").disabled=true;setTimeout(startGG,600)}}}
+
+let ggseq=[],ggi=0;
+function startGG(){hideAll();$("gonogo").classList.remove("hidden");ggseq=Array.from({length:16},(_,i)=>i<12?"go":"nogo").sort(()=>Math.random()-.5);ggi=0;data.gonogo=[];nextGG()}
+function nextGG(){if(ggi>=ggseq.length){startMemory();return}state="ggwait";$("ggprog").textContent=`Task 3/4 · Go / No-Go · ${ggi+1}/16`;$("ggarena").innerHTML='<div class="muted">+</div>';timer=setTimeout(()=>{state="ggshow";let type=ggseq[ggi];t0=performance.now();$("ggarena").innerHTML=type==="go"?'<div><div class="dot"></div><div class="big">TAP</div></div>':'<div><div style="font-size:120px">▲</div><div class="big">DON’T TAP</div></div>';timer=setTimeout(()=>finishGG(false),700)},500+Math.random()*500)}
+function finishGG(tapped){if(state!=="ggshow")return;clearTimeout(timer);let type=ggseq[ggi],rt=tapped?performance.now()-t0:null;data.gonogo.push({trial:ggi+1,type,tapped,correct:(type==="go"&&tapped)||(type==="nogo"&&!tapped),rt:rt?+rt.toFixed(3):null});state="ggbetween";ggi++;setTimeout(nextGG,300)}
+$("ggarena").addEventListener("pointerdown",e=>{e.preventDefault();if(state==="ggshow")finishGG(true)},{passive:false});
+
+function startMemory(){hideAll();$("memory").classList.remove("hidden");let seq=Array.from({length:5},()=>Math.floor(Math.random()*9)+1),target=Math.floor(Math.random()*5);data.memory={sequence:seq,target:target+1,answer:null,correct:null};$("memarena").innerHTML=`<div><div class="big">${seq.join("  ")}</div><div class="muted">Remember the sequence</div></div>`;setTimeout(()=>{let correct=seq[target],wrong=correct;while(wrong===correct)wrong=Math.floor(Math.random()*9)+1;let opts=[correct,wrong].sort(()=>Math.random()-.5);$("memarena").innerHTML=`<div><div class="big">What was number ${target+1}?</div><div class="choice">${opts.map(x=>`<button onclick="answerMem(${x})">${x}</button>`).join("")}</div></div>`},2500)}
+function answerMem(x){data.memory.answer=x;data.memory.correct=x===data.memory.sequence[data.memory.target-1];finish()}
+function finish(){hideAll();$("result").classList.remove("hidden");let r=data.rt.map(x=>x.rt),go=data.gonogo.filter(x=>x.type==="go"&&x.tapped).map(x=>x.rt),acc=data.gonogo.filter(x=>x.correct).length/data.gonogo.length*100;
+$("r_rt").textContent=Math.round(median(r))+" ms";$("r_sd").textContent=Math.round(sd(r))+" ms";$("r_tap").textContent=(data.tap.length/15).toFixed(1)+"/s";$("r_gg").textContent=Math.round(acc)+"%";$("r_ggrt").textContent=go.length?Math.round(median(go))+" ms":"—";$("r_mem").textContent=data.memory.correct?"Correct":"Incorrect";$("when").textContent=new Date().toLocaleString();localStorage.setItem("HDB_last_session",JSON.stringify(data))}
+function exportCSV(){let rows=[["participant","session","task","trial","type","value","correct"]];
+data.rt.forEach(x=>rows.push([data.participant,data.session,"reaction",x.trial,"rt_ms",x.rt,""]));
+data.tap.forEach((x,i)=>rows.push([data.participant,data.session,"tapping",i+1,"tap_timestamp_ms",x,""]));
+data.gonogo.forEach(x=>rows.push([data.participant,data.session,"gonogo",x.trial,x.type,x.rt??"",x.correct]));
+rows.push([data.participant,data.session,"memory",1,"answer",data.memory.answer,data.memory.correct]);
+let csv=rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(",")).join("\n"),blob=new Blob([csv],{type:"text/csv"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`HDB_${data.participant}_${Date.now()}.csv`;a.click()}
+</script></body></html>
